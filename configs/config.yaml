@@ -1,0 +1,19 @@
+server:
+  http:
+    addr: 0.0.0.0:8810
+    timeout: 1s
+  grpc:
+    addr: 0.0.0.0:8811
+    timeout: 1s
+data:
+  database:
+    driver: mysql
+    dsn: test:123456@tcp(192.168.0.250:3306)/bbbid?charset=utf8mb4&parseTime=True&loc=Local
+    max_conns: 100
+    idle_conns: 10
+    life_time: 1800s
+    idle_time: 600s
+  redis:
+    addr: 192.168.0.250:6379
+    read_timeout: 0.2s
+    write_timeout: 0.2s

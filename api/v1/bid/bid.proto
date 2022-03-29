@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package bid.v1;
+
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "bbbid/api/v1/bid;bid";
+option java_multiple_files = true;
+option java_package = "bbbid.api.v1.bid";
+option java_outer_classname = "BidProtoV1";
+
+// 用户服务
+service Bid {
+  //获取ID
+  rpc GetId (IdReq) returns (IdRes)  {
+    option (google.api.http) = {
+      post: "/v1/getId",
+      body: "*",
+      additional_bindings {
+        get: "/v1/getId/{ckey}"
+      }
+    };
+  }
+  // 添加业务
+  rpc AddBiz (AddReq) returns (AddRes)  {
+    option (google.api.http) = {
+      post: "/v1/addBiz",
+      body: "*",
+      additional_bindings {
+        get: "/v1/addBiz"
+      }
+    };
+  }
+}
+
+enum BidType {
+  BIDTYPE_NONE = 0;
+  BIDTYPE_INCREMENT = 1;
+  BIDTYPE_RAND = 2;
+  BIDTYPE_SNOWFLAKE = 3;
+}
+
+message StringRes {
+  string data = 1;
+}
+
+//获取ID请求参数
+message IdReq {
+  string ckey = 1 [(validate.rules).string = {min_len: 1, max_len: 50}];
+}
+
+//ID返回实体
+message IdRes {
+  int64 id = 1;
+}
+
+message AddReq {
+  string ckey = 1 [(validate.rules).string = {min_len: 1, max_len: 50}];
+  BidType type = 2;
+  int64 step = 3 [(validate.rules).int64 = {gt: 0}];
+  int64 maxid = 4 [(validate.rules).int64 = {gt: 0}];
+  string intro = 5 [(validate.rules).string = {min_len: 1, max_len: 50}];
+}
+
+message AddRes {
+
+}
