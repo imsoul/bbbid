@@ -5,7 +5,7 @@ bbbid是一个高性能的分布式ID生成器，使用微服务框架kratos开�
 
 #### Leaf Server
 
-![bbbid-cn](img\bbbid-cn.png)
+![bbbid-cn](https://github.com/imsoul/bbbid/blob/main/img/bbbid-cn.png?raw=true)
 
 
 
@@ -115,8 +115,8 @@ http://192.168.0.250:8810/v1/addBiz?ckey=demo1&type=2&step=1000&maxid=10000&intr
 
 #### 压测
 
-![wrk](img\wrk.jpg)
+![wrk](https://github.com/imsoul/bbbid/blob/main/img/wrk.jpg?raw=true)
 
 
 
-![bench](img\bench.jpg)
+![bench](https://github.com/imsoul/bbbid/blob/main/img/bench.jpg?raw=true)
