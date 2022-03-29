@@ -1,8 +1,7 @@
 # bbbid简介
 
-bbbid是一个高性能的分布式ID生成器，使用微服务框架kratos开发；实现美团Leaf segment算法；
-
-
+bbbid是一个高性能的分布式ID生成器，使用微服务框架kratos开发；
+实现 [美团Leaf segment算法](https://tech.meituan.com/2019/03/07/open-source-project-leaf.html)，可分布式部署，保证高可用；
 
 #### Leaf Server
 
