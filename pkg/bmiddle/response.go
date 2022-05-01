@@ -46,9 +46,11 @@ func ResponseError(writer stdhttp.ResponseWriter, request *stdhttp.Request, err 
 	if se := errors.FromError(err); se != nil {
 		code, _ = strconv.Atoi(se.GetReason())
 		message = se.GetMessage()
+		writer.WriteHeader(int(se.GetCode()))
 	} else if errors.As(err, &toerr) {
 		code, _ = strconv.Atoi(toerr.GetReason())
 		message = toerr.GetMessage()
+		writer.WriteHeader(int(toerr.GetCode()))
 	}
 
 	if code == 0 && message == "" {
