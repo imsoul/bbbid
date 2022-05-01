@@ -19,7 +19,7 @@ import (
 )
 
 // ProviderSet is data providers.
-var ProviderSet = wire.NewSet(NewData, NewDb, NewRedis, NewSegmentRepo)
+var ProviderSet = wire.NewSet(NewData, NewDb, NewRedis, NewRedisCluster, NewSegmentRepo)
 
 // Data .
 type Data struct {
@@ -82,6 +82,17 @@ func NewDb(conf *conf.Data) *gorm.DB {
 
 // NewRedis init redis
 func NewRedis(conf *conf.Data) *redis.Client {
+	// 哨兵模式
+	//rdbClient := redis.NewFailoverClient(&redis.FailoverOptions{
+	//	MasterName: "mymaster",
+	//	SentinelAddrs: []string{conf.Redis.Addr},
+	//	Password:     conf.Redis.Password,
+	//	DB:           int(conf.Redis.Db),
+	//	DialTimeout:  conf.Redis.DialTimeout.AsDuration(),
+	//	WriteTimeout: conf.Redis.WriteTimeout.AsDuration(),
+	//	ReadTimeout:  conf.Redis.ReadTimeout.AsDuration(),
+	//})
+
 	rdbClient := redis.NewClient(&redis.Options{
 		Addr:         conf.Redis.Addr,
 		Password:     conf.Redis.Password,
@@ -93,6 +104,37 @@ func NewRedis(conf *conf.Data) *redis.Client {
 	rdbClient.AddHook(redisotel.TracingHook{})
 
 	_, err := rdbClient.Ping(context.Background()).Result()
+	if err != nil {
+		panic(err)
+	}
+	return rdbClient
+}
+
+// NewRedisCluster init redis
+func NewRedisCluster(conf *conf.Data) *redis.ClusterClient {
+	// 集群模式
+	rdbClient := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: conf.GetRedis().GetCluster().GetAddrs(),
+		NewClient: func(opt *redis.Options) *redis.Client {
+			return redis.NewClient(opt)
+		},
+		RouteByLatency: true,
+		DialTimeout:    conf.GetRedis().GetDialTimeout().AsDuration(),
+		ReadTimeout:    conf.GetRedis().GetReadTimeout().AsDuration(),
+		WriteTimeout:   conf.GetRedis().GetWriteTimeout().AsDuration(),
+		PoolSize:       int(conf.GetRedis().GetPoolSize()),
+		MinIdleConns:   int(conf.GetRedis().GetMinIdle()),
+		//MaxConnAge:         0,
+		//PoolTimeout:        0,
+		//IdleTimeout:        0,
+		//IdleCheckFrequency: 0,
+	})
+
+	rdbClient.AddHook(redisotel.TracingHook{})
+
+	err := rdbClient.ForEachShard(context.Background(), func(ctx context.Context, shard *redis.Client) error {
+		return shard.Ping(ctx).Err()
+	})
 	if err != nil {
 		panic(err)
 	}

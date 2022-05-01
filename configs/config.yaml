@@ -14,6 +14,15 @@ data:
     life_time: 1800s
     idle_time: 600s
   redis:
+    db: 0
     addr: 192.168.0.250:6379
-    read_timeout: 0.2s
-    write_timeout: 0.2s
+    read_timeout: 0.5s
+    write_timeout: 0.5s
+    pool_size: 100
+    min_idle: 10
+    sentinel:
+      master_name: mymaster
+      addrs: []
+    cluster:
+      addrs: ["192.168.0.250:6379", "192.168.0.250:6380", "192.168.0.251:6379", "192.168.0.251:6380", "192.168.0.252:6379", "192.168.0.252:6380"]
+
