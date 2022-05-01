@@ -28,7 +28,6 @@ type Segment struct {
 	Intro   string `json:"intro,omitempty"`
 	Uptime  int64  `json:"uptime,omitempty"`
 	Addtime int64  `json:"addtime,omitempty"`
-	Running bool   `gorm:"-"`
 }
 
 func (Segment) TableName() string {
@@ -49,26 +48,30 @@ type SegmentRepo interface {
 	PushStep(ctx context.Context, key string, value string) (int64, error)
 }
 
+type HandlerFunc func(repo SegmentRepo, logger *log.Helper) IdBuilder
+
+var BuilderMap = map[bid.BidType]HandlerFunc{
+	bid.BidType_BIDTYPE_INCREMENT: NewIncBuilder,
+	bid.BidType_BIDTYPE_RAND:      NewRandBuilder,
+}
+
 type SegmentUsecase struct {
 	repo SegmentRepo
 	log  *log.Helper
 
-	currentQueue map[string]chan int64
-	currentStep  map[string]*Segment
+	builderMap map[string]IdBuilder
 
-	queueMu sync.RWMutex
-
+	mu     sync.RWMutex
 	rander *rand.Rand
 }
 
 func NewSegmentUsecase(repo SegmentRepo, logger log.Logger) *SegmentUsecase {
 	useCase := &SegmentUsecase{
-		repo:         repo,
-		log:          log.NewHelper(logger),
-		queueMu:      sync.RWMutex{},
-		currentQueue: make(map[string]chan int64),
-		currentStep:  make(map[string]*Segment),
-		rander:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		repo:       repo,
+		log:        log.NewHelper(logger),
+		mu:         sync.RWMutex{},
+		builderMap: make(map[string]IdBuilder),
+		rander:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	useCase.UpdateSegmentQueue()
@@ -96,6 +99,8 @@ func (uc *SegmentUsecase) UpdateSegmentQueue() {
 					uc.log.Error("PopStep err: ", err)
 				}
 			} else if res[1] != "" {
+				//fmt.Println("PopStep: ", res[1])
+
 				step := Segment{}
 				err = json.Unmarshal([]byte(res[1]), &step)
 				if err != nil {
@@ -139,6 +144,14 @@ func (uc *SegmentUsecase) UpdateSegmentQueue() {
 	})
 }
 
+func (uc *SegmentUsecase) GetBuilder(bidType bid.BidType) (IdBuilder, error) {
+	if _, ok := BuilderMap[bidType]; !ok {
+		return nil, errors.New(http.StatusNotFound, "404", "builder not found")
+	}
+	newFun := BuilderMap[bidType]
+	return newFun(uc.repo, uc.log), nil
+}
+
 func (uc *SegmentUsecase) Init(ctx context.Context) (err error) {
 	segmentList, err := uc.repo.GetSegmentList(ctx)
 	if err != nil {
@@ -146,128 +159,67 @@ func (uc *SegmentUsecase) Init(ctx context.Context) (err error) {
 	}
 	if len(segmentList) > 0 {
 		for _, segment := range segmentList {
-			err = uc.InitQueue(ctx, segment)
+			err = uc.InitBuilder(segment)
 			if err != nil {
-				continue
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-func (uc *SegmentUsecase) InitQueue(ctx context.Context, segment Segment) error {
-	uc.currentQueue[segment.Ckey] = make(chan int64, segment.Step+segment.Step/2+1)
-	uc.currentStep[segment.Ckey] = &segment
+func (uc *SegmentUsecase) InitBuilder(segment Segment) (err error) {
+	//fmt.Println("========InitBuilder=======")
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
 
-	uc.queueMu.Lock()
-	uc.currentStep[segment.Ckey].Running = true
-	uc.queueMu.Unlock()
+	if _, ok := uc.builderMap[segment.Ckey]; ok {
+		err = errors.New(http.StatusBadRequest, "400", "Key Exist")
+		return
+	}
 
-	defer func() {
-		uc.queueMu.Lock()
-		uc.currentStep[segment.Ckey].Running = false
-		uc.queueMu.Unlock()
-	}()
-
-	return uc.NextQueue(ctx, segment.Ckey)
-}
-
-func (uc *SegmentUsecase) NextQueue(ctx context.Context, ckey string) error {
-	//TODO: 根据错误率动态调整step
-	maxid, err := uc.repo.GetNextMaxid(ctx, uc.currentStep[ckey])
-
+	uc.builderMap[segment.Ckey], err = uc.GetBuilder(bid.BidType(segment.Type))
 	if err != nil {
-		uc.log.Error("Next err: ", err)
 		return err
 	}
 
-	uc.currentStep[ckey].Maxid = maxid
+	//fmt.Println("uc.builderMap: ", uc.builderMap)
 
-	upctx, _ := context.WithTimeout(context.Background(), time.Second*1)
-	stepstr, _ := json.Marshal(uc.currentStep[ckey])
-
-	//update maxid queue
-	_, err = uc.repo.PushStep(upctx, UpdateQueueKey, string(stepstr))
+	err = uc.builderMap[segment.Ckey].Init(context.Background(), segment)
 	if err != nil {
-		uc.log.Error("PushStep Err: ", err)
-	}
-
-	nextId := maxid - uc.currentStep[ckey].Step
-
-	if uc.currentStep[ckey].Type == int8(bid.BidType_BIDTYPE_INCREMENT) {
-		for i := nextId; i < maxid; i++ {
-			uc.currentQueue[ckey] <- i
-		}
-	} else if uc.currentStep[ckey].Type == int8(bid.BidType_BIDTYPE_RAND) {
-		idlist := make([]int64, 0)
-
-		for i := nextId; i < maxid; i++ {
-			idlist = append(idlist, i)
-		}
-
-		//rand
-		rand.Shuffle(len(idlist), func(i, j int) { idlist[i], idlist[j] = idlist[j], idlist[i] })
-
-		for _, id := range idlist {
-			uc.currentQueue[ckey] <- id
-		}
-	} else {
-		return errors.New(http.StatusNotFound, "404", "Type Error")
+		return
 	}
 
 	return nil
 }
 
 func (uc *SegmentUsecase) GetId(ctx context.Context, ckey string) (int64, error) {
-	if _, ok := uc.currentQueue[ckey]; !ok {
+	uc.mu.RLock()
+	builder, ok := uc.builderMap[ckey]
+	uc.mu.RUnlock()
+
+	//fmt.Printf("builder: %+v \n", builder)
+
+	if !ok {
 		return 0, nil
 	}
 
-	uc.queueMu.RLock()
-	isRunning := uc.currentStep[ckey].Running
-	step := uc.currentStep[ckey].Step
-	uc.queueMu.RUnlock()
-
-	if !isRunning && float32(len(uc.currentQueue[ckey]))/float32(step) < 0.5 {
-		uc.queueMu.Lock()
-		uc.currentStep[ckey].Running = true
-		uc.queueMu.Unlock()
-		util.Go(func() {
-			defer func() {
-				uc.queueMu.Lock()
-				uc.currentStep[ckey].Running = false
-				uc.queueMu.Unlock()
-			}()
-
-			qctx, _ := context.WithTimeout(context.Background(), time.Second)
-			_ = uc.NextQueue(qctx, ckey)
-		})
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return 0, nil
-		case <-time.After(time.Millisecond * 500):
-			return 0, errors.New(http.StatusServiceUnavailable, "503", "Busy")
-		case id, ok := <-uc.currentQueue[ckey]:
-			if !ok {
-				return 0, errors.New(http.StatusNotFound, "404", "Busy")
-			}
-
-			return id, nil
-		}
-	}
+	return builder.GetId(ctx)
 }
 
 // AddBiz 新增业务
 func (uc *SegmentUsecase) AddBiz(ctx context.Context, req *bid.AddReq) (seg Segment, err error) {
+	if _, ok := uc.builderMap[req.GetCkey()]; ok {
+		err = errors.New(http.StatusBadRequest, "400", "Key Exist")
+		return
+	}
+
 	seg, err = uc.repo.GetSegment(ctx, req.GetCkey())
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return
 	}
 	if seg.Ckey != "" {
-		err = errors.New(http.StatusBadRequest, "400", "Key Exist")
+		err = uc.InitBuilder(seg)
 		return
 	}
 
@@ -287,6 +239,7 @@ func (uc *SegmentUsecase) AddBiz(ctx context.Context, req *bid.AddReq) (seg Segm
 		return
 	}
 
-	err = uc.InitQueue(ctx, seg)
+	err = uc.InitBuilder(seg)
+
 	return
 }

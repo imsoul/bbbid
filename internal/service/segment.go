@@ -40,8 +40,8 @@ func (s *SegmentService) AddBiz(ctx context.Context, req *pb.AddReq) (res *pb.Ad
 // GetId 获取ID
 func (s *SegmentService) GetId(ctx context.Context, req *pb.IdReq) (res *pb.IdRes, err error) {
 	id, err := s.uc.GetId(ctx, req.GetCkey())
-	if err != nil {
-		s.log.Error("GetId", err)
+	if err != nil || id == 0 {
+		//s.log.Errorf("id: %d, err: %+v", id, err)
 		return nil, err
 	}
 

@@ -8,7 +8,6 @@ bbbid是一个高性能的分布式ID生成器，使用微服务框架kratos开�
 ![bbbid-cn](https://github.com/imsoul/bbbid/blob/main/img/bbbid-cn.png?raw=true)
 
 
-
 ## 环境准备
 
 ### 安装Kratos
@@ -73,13 +72,13 @@ server:
 data:
   database:
     driver: mysql
-    dsn: test:123456@tcp(192.168.0.250:3306)/bbbid?charset=utf8mb4&parseTime=True&loc=Local
+    dsn: test:123456@tcp(127.0.0.1:3306)/bbbid?charset=utf8mb4&parseTime=True&loc=Local
     max_conns: 100
     idle_conns: 10
     life_time: 1800s
     idle_time: 600s
   redis:
-    addr: 192.168.0.250:6379
+    addr: 127.0.0.1:6379
     read_timeout: 0.2s
     write_timeout: 0.2s
 
@@ -93,12 +92,18 @@ data:
 kratos run
 ```
 
+请求获取ID
+
+```
+http://127.0.0.1:8810/v1/getId/test
+```
+
 
 
 添加业务
 
 ```
-http://192.168.0.250:8810/v1/addBiz?ckey=demo1&type=2&step=1000&maxid=10000&intro=新业务ID
+http://127.0.0.1:8810/v1/addBiz?ckey=demo1&type=2&step=1000&maxid=10000&intro=新业务ID
 ```
 
 参数说明
@@ -114,6 +119,12 @@ http://192.168.0.250:8810/v1/addBiz?ckey=demo1&type=2&step=1000&maxid=10000&intr
 
 
 #### 压测
+
+```
+wrk -c500 -t10 -d10s -T1s http://127.0.0.1:8810/v1/getId/test
+```
+
+
 
 ![wrk](https://github.com/imsoul/bbbid/blob/main/img/wrk.jpg?raw=true)
 
