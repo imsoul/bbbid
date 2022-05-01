@@ -5,7 +5,8 @@ bbbid是一个高性能的分布式ID生成器，使用微服务框架kratos开�
 
 #### Leaf Server
 
-![bbbid-cn](https://github.com/imsoul/bbbid/blob/dev/assets/bbbid-cn.png?raw=true)
+![bbbid-cn](https://github.com/imsoul/bbbid/blob/main/assets/bbbid-cn.png?raw=true)
+
 
 
 ## 环境准备
@@ -72,16 +73,23 @@ server:
 data:
   database:
     driver: mysql
-    dsn: test:123456@tcp(127.0.0.1:3306)/bbbid?charset=utf8mb4&parseTime=True&loc=Local
+    dsn: test:123456@tcp(192.168.0.250:3306)/bbbid?charset=utf8mb4&parseTime=True&loc=Local
     max_conns: 100
     idle_conns: 10
     life_time: 1800s
     idle_time: 600s
   redis:
-    addr: 127.0.0.1:6379
-    read_timeout: 0.2s
-    write_timeout: 0.2s
-
+    db: 0
+    addr: 192.168.0.250:6379
+    read_timeout: 0.5s
+    write_timeout: 0.5s
+    pool_size: 100
+    min_idle: 10
+    sentinel:
+      master_name: mymaster
+      addrs: []
+    cluster:
+      addrs: ["192.168.0.250:6379", "192.168.0.250:6380", "192.168.0.251:6379", "192.168.0.251:6380", "192.168.0.252:6379", "192.168.0.252:6380"]
 ```
 
 
@@ -90,12 +98,6 @@ data:
 
 ```bash
 kratos run
-```
-
-请求获取ID
-
-```
-http://127.0.0.1:8810/v1/getId/test
 ```
 
 
@@ -121,13 +123,17 @@ http://127.0.0.1:8810/v1/addBiz?ckey=demo1&type=2&step=1000&maxid=10000&intro=�
 #### 压测
 
 ```
-wrk -c500 -t10 -d10s -T1s http://127.0.0.1:8810/v1/getId/test
+wrk -t12 -c400 -d10s http://127.0.0.1:8810/v1/getId/test
 ```
 
 
 
-![wrk](https://github.com/imsoul/bbbid/blob/dev/assets/wrk2.png?raw=true)
+![wrk](https://github.com/imsoul/bbbid/blob/main/assets/wrk2.png?raw=true)
 
+#### benchmark
 
+```
+go test -bench=. -benchmem
+```
 
-![bench](https://github.com/imsoul/bbbid/blob/dev/assets/bench2.png?raw=true)
+![bench](https://github.com/imsoul/bbbid/blob/main/assets/bench2.png?raw=true)
