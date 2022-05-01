@@ -13,6 +13,7 @@ import (
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/natefinch/lumberjack"
+	_ "go.uber.org/automaxprocs"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 )
